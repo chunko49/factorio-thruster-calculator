@@ -8,18 +8,22 @@
   --border-strong: #434d5d;
   --text: #e6ebf2;
   --text-muted: #98a4b5;
+
+  /* Factoriopedia Curve Palette */
+  --fp-green: #58d62b;     /* Thrust */
+  --fp-orange: #ff7a18;    /* Efficiency */
+  --fp-blue: #1e96ff;      /* Fluid Usage */
+  --fp-red: #ef4444;       /* Cruise Speed */
+  --fp-red-bright: #f87171;
+  --fp-purple: #c084fc;    /* Pump Cap marker */
+
+  /* UI Accents */
   --amber: #f59e0b;
   --amber-soft: rgba(245, 158, 11, 0.14);
-  --green: #22c55e;
-  --green-soft: rgba(34, 197, 94, 0.14);
-  --blue: #3b82f6;
-  --blue-bright: #4ea1ff;
-  --blue-soft: rgba(59, 130, 246, 0.16);
-  --cyan: #38bdf8;
-  --cyan-soft: rgba(56, 189, 248, 0.14);
-  --red: #ef4444;
-  --red-bright: #f87171;
+  --green-soft: rgba(88, 214, 43, 0.14);
+  --blue-soft: rgba(30, 150, 255, 0.15);
   --red-soft: rgba(239, 68, 68, 0.15);
+
   --radius: 12px;
   --radius-sm: 8px;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
@@ -40,7 +44,7 @@ body {
 }
 
 .app-shell {
-  max-width: 1240px;
+  max-width: 1260px;
   margin: 0 auto;
   padding: 20px 18px 48px;
   display: flex;
@@ -158,7 +162,7 @@ h3 {
 /* Hero Grid */
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr);
   gap: 18px;
 }
 
@@ -173,7 +177,7 @@ h3 {
 
 .hero-subline {
   margin: 0 0 16px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--text-muted);
 }
 
@@ -188,10 +192,10 @@ h3 {
   white-space: nowrap;
 }
 
-.pill.pill-cyan {
-  background: var(--cyan-soft);
-  color: var(--cyan);
-  border-color: rgba(56, 189, 248, 0.35);
+.pill.pill-blue {
+  background: var(--blue-soft);
+  color: var(--fp-blue);
+  border-color: rgba(30, 150, 255, 0.4);
 }
 
 .kpi-grid {
@@ -211,34 +215,34 @@ h3 {
 }
 
 .kpi-label {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .kpi-value {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 750;
   font-family: var(--font-mono);
 }
 
 .kpi-value small {
-  font-size: 0.78rem;
+  font-size: 0.79rem;
   font-weight: 600;
-  color: var(--text-muted);
+  opacity: 0.85;
 }
 
 .kpi-meta {
-  font-size: 0.77rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
 }
 
-.text-green { color: var(--green); }
-.text-blue { color: var(--blue-bright); }
-.text-cyan { color: var(--cyan); }
-.text-amber { color: var(--amber); }
-.text-red { color: var(--red-bright); }
+.text-green { color: var(--fp-green); }
+.text-orange { color: var(--fp-orange); }
+.text-blue { color: var(--fp-blue); }
+.text-red { color: var(--fp-red-bright); }
+.text-purple { color: var(--fp-purple); }
 
 /* Segmented Controls & Buttons */
 .header-actions {
@@ -299,7 +303,7 @@ h3 {
 }
 
 .btn-warning {
-  background: var(--red);
+  background: var(--fp-red);
   color: #fff;
 }
 
@@ -365,8 +369,8 @@ h3 {
 
 .wire-green {
   background: var(--green-soft);
-  color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #a3f282;
+  border: 1px solid rgba(88, 214, 43, 0.4);
 }
 
 .callout {
@@ -381,9 +385,9 @@ h3 {
 }
 
 .callout.callout-good {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.08);
-  color: #d1fae5;
+  border-color: rgba(88, 214, 43, 0.35);
+  background: rgba(88, 214, 43, 0.08);
+  color: #d9f9ce;
 }
 
 .callout.callout-warn {
@@ -448,13 +452,13 @@ h3 {
 }
 
 .switch input:checked + .slider {
-  background: rgba(56, 189, 248, 0.35);
-  border-color: var(--cyan);
+  background: rgba(30, 150, 255, 0.35);
+  border-color: var(--fp-blue);
 }
 
 .switch input:checked + .slider::before {
   transform: translateX(20px);
-  background: var(--cyan);
+  background: var(--fp-blue);
 }
 
 /* Warning Banner */
@@ -479,7 +483,7 @@ h3 {
 /* Controls Layout */
 .controls-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr);
   gap: 22px;
   align-items: start;
 }
@@ -630,9 +634,10 @@ input[type="range"] {
   display: inline-block;
 }
 
-.dot-green { background: var(--green); }
-.dot-blue { background: var(--blue-bright); }
-.dot-red { background: var(--red); }
+.dot-green { background: var(--fp-green); }
+.dot-orange { background: var(--fp-orange); }
+.dot-blue { background: var(--fp-blue); }
+.dot-red { background: var(--fp-red); }
 
 .svg-frame {
   background: var(--surface-2);
@@ -641,6 +646,11 @@ input[type="range"] {
   padding: 8px;
   overflow: hidden;
   user-select: none;
+}
+
+.factoriopedia-frame {
+  background: #121212;
+  border-color: #363636;
 }
 
 #operatingCurveSvg {
@@ -652,17 +662,34 @@ input[type="range"] {
   display: block;
 }
 
-.curve-readout-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px 14px;
-  padding: 9px 12px;
+.curve-readout-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readout-item {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.readout-k {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.readout-v {
   font-size: 0.82rem;
   font-family: var(--font-mono);
+  font-weight: 650;
 }
 
 /* Collapsible Drawers */
@@ -779,11 +806,11 @@ input[type="range"] {
 }
 
 .pulse-cell.on-pwm {
-  background: var(--amber);
+  background: var(--fp-orange);
 }
 
 .pulse-cell.on-ds {
-  background: var(--cyan);
+  background: var(--fp-blue);
 }
 
 .pulse-cell.active-cursor {
@@ -844,12 +871,12 @@ input[type="range"] {
 }
 
 .pipe-card.pumping {
-  border-color: var(--green);
-  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--fp-green);
+  background: rgba(88, 214, 43, 0.12);
 }
 
 .pipe-card.blocked {
-  border-color: var(--red);
+  border-color: var(--fp-red);
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -945,7 +972,7 @@ input[type="range"] {
 }
 
 .source-links a {
-  color: var(--blue-bright);
+  color: var(--fp-blue);
   text-decoration: none;
 }
 
@@ -964,8 +991,9 @@ input[type="range"] {
 
 @media (max-width: 640px) {
   .field-row.two-col,
-  .live-pipes {
-    grid-template-columns: 1fr;
+  .live-pipes,
+  .curve-readout-grid {
+    grid-template-columns: 1fr 1fr;
   }
   .pulse-row {
     grid-template-columns: 1fr;
