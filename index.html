@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Factorio 2.1.21+ Thruster Speed &amp; Pump Control Calculator</title>
-  <meta name="description" content="Calculate Factorio Space Age (2.1.21+) thruster cruise speed, efficiency, PWM pump clocks, and Delta-Sigma (Bresenham) phase accumulators." />
+  <meta name="description" content="Calculate Factorio Space Age (2.1.21+) thruster performance curves, cruise speed, PWM pump clocks, and Delta-Sigma (Bresenham) phase accumulators." />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
         <div class="brand-mark" aria-hidden="true">⚙</div>
         <div>
           <h1>Factorio Thruster Speed &amp; Pump Control</h1>
-          <p class="subtitle">Space Age 2.1.21+ weight-drag physics, PWM clocks &amp; Delta-Sigma pulse spreading</p>
+          <p class="subtitle">Space Age 2.1.21+ weight-drag physics, Factoriopedia curves, PWM clocks &amp; Delta-Sigma pulse spreading</p>
         </div>
       </div>
       <div class="header-badges">
@@ -36,28 +36,28 @@
           <span class="pill" id="heroMethodPill">PWM</span>
         </div>
 
-        <p class="hero-subline" id="heroSubline">18 ticks ON, 31 ticks OFF · 36.73% duty cycle</p>
+        <p class="hero-subline" id="heroSubline">18 ticks ON, 31 ticks OFF · 36.73% duty cycle · Error: -0.04%</p>
 
         <div class="kpi-grid">
           <div class="kpi">
-            <span class="kpi-label">Cruise Speed</span>
-            <span class="kpi-value text-red" id="kpiSpeed">218.8 <small>km/s</small></span>
-            <span class="kpi-meta" id="kpiSpeedBand">209 – 229 km/s (±10g)</span>
+            <span class="kpi-label">Thrust (Green)</span>
+            <span class="kpi-value text-green" id="kpiThrust">77.7% <small>(79.3 MN)</small></span>
+            <span class="kpi-meta" id="kpiThrustMeta">554.9 MN total · 7 thrusters</span>
           </div>
           <div class="kpi">
-            <span class="kpi-label">Efficiency</span>
-            <span class="kpi-value text-green" id="kpiEff">75.5<small>%</small></span>
+            <span class="kpi-label">Efficiency (Orange)</span>
+            <span class="kpi-value text-orange" id="kpiEff">75.5<small>%</small></span>
             <span class="kpi-meta" id="kpiFill">45.0% fluid fill</span>
           </div>
           <div class="kpi">
-            <span class="kpi-label">Fluid Consumption</span>
-            <span class="kpi-value text-blue" id="kpiFlow">440.8 <small>u/s</small></span>
-            <span class="kpi-meta" id="kpiPerThruster">63.0 u/s per thruster</span>
+            <span class="kpi-label">Fluid Usage (Blue)</span>
+            <span class="kpi-value text-blue" id="kpiFlow">105.0% <small>(63.0 u/s)</small></span>
+            <span class="kpi-meta" id="kpiFlowMeta">440.8 u/s total per fluid</span>
           </div>
           <div class="kpi">
-            <span class="kpi-label">Total Thrust</span>
-            <span class="kpi-value text-amber" id="kpiThrust">554.9 <small>MN</small></span>
-            <span class="kpi-meta" id="kpiError">Error: -0.04%</span>
+            <span class="kpi-label">Cruise Speed (Red)</span>
+            <span class="kpi-value text-red" id="kpiSpeed">87.9% <small>(218.8 km/s)</small></span>
+            <span class="kpi-meta" id="kpiSpeedBand">209 – 229 km/s (±10g) · Max 248.9</span>
           </div>
         </div>
       </div>
@@ -88,7 +88,7 @@
       <div class="card-header">
         <div>
           <span class="eyebrow">Ship &amp; Target Configuration</span>
-          <h2>Control Parameters &amp; Live Thruster Curve</h2>
+          <h2>Control Parameters &amp; Thruster Performance Curves</h2>
         </div>
         <div class="toggle-row">
           <label class="switch" for="toggleDeltaSigma">
@@ -165,8 +165,8 @@
               <option value="efficiency" selected>Target Efficiency (%)</option>
               <option value="speed">Target Cruise Speed (km/s)</option>
               <option value="fill">Target Fluid Fill (%)</option>
-              <option value="flowPerThruster">Fluid Consumption / Thruster (u/s)</option>
-              <option value="totalFlow">Total Fluid Consumption (u/s)</option>
+              <option value="flowPerThruster">Fluid Usage / Thruster (u/s)</option>
+              <option value="totalFlow">Total Fluid Usage (u/s)</option>
               <option value="manual">Manual PWM Ticks (ON / Period)</option>
             </select>
           </div>
@@ -219,30 +219,50 @@
           </div>
         </div>
 
-        <!-- Right Column: Live Interactive Operating Curve -->
+        <!-- Right Column: Factoriopedia-Matched Interactive Performance Curves -->
         <div class="chart-col">
           <div class="chart-header">
             <div>
-              <h3>Operating Curve (Click or Drag to Set)</h3>
-              <p class="chart-caption">Shows where Efficiency, Fluid Consumption, and Cruise Speed land across 10%–80% fluid reserve.</p>
+              <h3>Thruster Performance Curves (Click or Drag to Set)</h3>
+              <p class="chart-caption">Factoriopedia 0–200% scale across 0–100% fill, plus Cruise Speed (% of theoretical max speed for this ship).</p>
             </div>
             <div class="legend-inline">
-              <span class="leg-item"><i class="dot dot-green"></i>Efficiency</span>
-              <span class="leg-item"><i class="dot dot-blue"></i>Fluid Consumption</span>
+              <span class="leg-item"><i class="dot dot-green"></i>Thrust</span>
+              <span class="leg-item"><i class="dot dot-orange"></i>Efficiency</span>
+              <span class="leg-item"><i class="dot dot-blue"></i>Fluid Usage</span>
               <span class="leg-item"><i class="dot dot-red"></i>Cruise Speed</span>
             </div>
           </div>
 
-          <div class="svg-frame" id="curveContainer">
-            <svg id="operatingCurveSvg" viewBox="0 0 640 310" width="100%" role="img" aria-label="Interactive thruster efficiency, fluid consumption, and speed curve"></svg>
+          <div class="svg-frame factoriopedia-frame" id="curveContainer">
+            <svg id="operatingCurveSvg" viewBox="0 0 650 320" width="100%" role="img" aria-label="Factoriopedia-style thruster performance curves showing Thrust, Efficiency, Fluid Usage, and Cruise Speed"></svg>
           </div>
 
-          <div class="curve-readout-bar">
-            <span><strong>Fill:</strong> <span id="readoutFill">45.0%</span></span>
-            <span><strong>Eff:</strong> <span id="readoutEff" class="text-green">75.5%</span></span>
-            <span><strong>Fluid/Thr:</strong> <span id="readoutFlow" class="text-blue">63.0 u/s</span></span>
-            <span><strong>Speed:</strong> <span id="readoutSpeed" class="text-red">218.8 km/s</span></span>
-            <span><strong>Pump Cap:</strong> <span id="readoutPumpCap">1200 u/s</span></span>
+          <div class="curve-readout-grid">
+            <div class="readout-item">
+              <span class="readout-k">Fill</span>
+              <span class="readout-v" id="readoutFill">45.0%</span>
+            </div>
+            <div class="readout-item">
+              <span class="readout-k text-green">Thrust</span>
+              <span class="readout-v text-green" id="readoutThrust">77.7% (79.3 MN)</span>
+            </div>
+            <div class="readout-item">
+              <span class="readout-k text-orange">Efficiency</span>
+              <span class="readout-v text-orange" id="readoutEff">75.5%</span>
+            </div>
+            <div class="readout-item">
+              <span class="readout-k text-blue">Fluid Usage</span>
+              <span class="readout-v text-blue" id="readoutFlow">105.0% (63.0 u/s)</span>
+            </div>
+            <div class="readout-item">
+              <span class="readout-k text-red">Cruise Speed</span>
+              <span class="readout-v text-red" id="readoutSpeed">87.9% (218.8 km/s)</span>
+            </div>
+            <div class="readout-item">
+              <span class="readout-k text-purple">Pump Cap</span>
+              <span class="readout-v" id="readoutPumpCap">1200 u/s</span>
+            </div>
           </div>
         </div>
       </div>
@@ -263,11 +283,11 @@
           <div class="stability-stats">
             <div class="mini-stat">
               <span class="mini-label">PWM Swing (Peak-to-Peak)</span>
-              <span class="mini-value text-amber" id="statPwmSwing">—</span>
+              <span class="mini-value text-orange" id="statPwmSwing">—</span>
             </div>
             <div class="mini-stat">
               <span class="mini-label">Delta-Sigma Swing</span>
-              <span class="mini-value text-cyan" id="statDsSwing">—</span>
+              <span class="mini-value text-blue" id="statDsSwing">—</span>
             </div>
             <div class="mini-stat">
               <span class="mini-label">Ripple Reduction</span>
@@ -278,7 +298,7 @@
           <div class="segmented" role="tablist" aria-label="Stability chart metric">
             <button type="button" class="seg-btn active" data-sim-metric="fill">Fill %</button>
             <button type="button" class="seg-btn" data-sim-metric="eff">Efficiency %</button>
-            <button type="button" class="seg-btn" data-sim-metric="flow">Fluid Consumption</button>
+            <button type="button" class="seg-btn" data-sim-metric="flow">Fluid Usage</button>
           </div>
         </div>
 
@@ -406,7 +426,7 @@
 max_performance = { fluid_volume = 0.8, fluid_usage = 2.0, effectivity = 0.51 }
 thrust_kN = 100000 × quality × fluid_usage_per_tick × effectivity</code>
           <p>
-            Normal thruster usage interpolates linearly from <code>6 u/s</code> (10% fill, 100% eff.) to <code>120 u/s</code> (80% fill, 51% eff.), scaling by quality (<code>1.0×, 1.3×, 1.6×, 1.9×, 2.5×</code>). Base pump throughput is <code>1200 u/s</code> (<code>20 u/tick</code>). Hub signals <em>Read moving from (1)</em> + <em>Read moving to (2)</em> sum to <code>3</code> while parked and <code>&lt; 3</code> while in transit.
+            In Factoriopedia, 100% fluid usage equals <code>1.0 u/tick</code> (<code>60 u/s</code> Normal), so usage runs from <code>10%</code> (<code>6 u/s</code>) at 10% fill to <code>200%</code> (<code>120 u/s</code>) at 80% fill, while thrust runs from <code>9.8%</code> (<code>10 MN</code>) to <code>100%</code> (<code>102 MN</code>), all scaling with quality (<code>1.0×, 1.3×, 1.6×, 1.9×, 2.5×</code>). Hub signals <em>Read moving from (1)</em> + <em>Read moving to (2)</em> sum to <code>3</code> while parked and <code>&lt; 3</code> while in transit.
           </p>
           <p class="source-links">
             Sources:

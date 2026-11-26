@@ -15,22 +15,25 @@
   const UPS = 60;
   const MIN_FILL = 0.10;          // 10% fluid reserve
   const MAX_FILL = 0.80;          // 80% fluid reserve
-  const MIN_USAGE_TICK = 0.1;     // 6 u/s normal thruster
-  const MAX_USAGE_TICK = 2.0;     // 120 u/s normal thruster
+  const MIN_USAGE_TICK = 0.1;     // 10% fluid usage (6 u/s normal thruster)
+  const MAX_USAGE_TICK = 2.0;     // 200% fluid usage (120 u/s normal thruster)
+  const BASE_USAGE_FLOW_S = 60;   // 100% Factoriopedia fluid usage = 1.0 u/tick = 60 u/s (Normal)
   const MIN_FLOW_S = MIN_USAGE_TICK * UPS; // 6 u/s
   const MAX_FLOW_S = MAX_USAGE_TICK * UPS; // 120 u/s
-  const MAX_EFF = 1.00;           // 100% at <= 10% fill
-  const MIN_EFF = 0.51;           // 51% at >= 80% fill
+  const MAX_EFF = 1.00;           // 100% efficiency at <= 10% fill
+  const MIN_EFF = 0.51;           // 51% efficiency at >= 80% fill
   const THRUST_SCALE = 100000;    // kN per (fluid_usage_per_tick * effectivity) -> 102,000 kN (102 MN) at 2.0 * 0.51
+  const MAX_THRUST_PER_THR_KN = THRUST_SCALE * MAX_USAGE_TICK * MIN_EFF; // 102,000 kN = 102 MN (Normal)
   const THRUSTER_FLUIDBOX = 1000; // units per fluidbox per thruster
   const GRAVITY_BAND_KMS = 10;    // ±10 km/s first/second half of route
 
-  // Curve palette (Fluid Consumption in Factoriopedia blue, Cruise Speed in red)
-  const COLOR_EFF = "#22c55e";
-  const COLOR_FLUID = "#4ea1ff";
-  const COLOR_SPEED = "#ef4444";
+  // Factoriopedia-coherent curve palette
+  const COLOR_THRUST = "#58d62b";     // Green: Thrust (%)
+  const COLOR_EFF = "#ff7a18";        // Orange: Efficiency (%)
+  const COLOR_FLUID = "#1e96ff";      // Blue: Fluid Usage (%)
+  const COLOR_SPEED = "#ef4444";      // Red: Cruise Speed (% of max speed)
   const COLOR_SPEED_TEXT = "#f87171";
-  const COLOR_PUMP_CAP = "#f59e0b";
+  const COLOR_PUMP_CAP = "#c084fc";   // Purple dashed: Pump Cap
 
   // =========================================================================
   // 2. APPLICATION STATE
@@ -42,7 +45,7 @@
     pumpCapacity: 1200,
     weightTons: 400,
     targetMode: "efficiency", // efficiency | speed | fill | flowPerThruster | totalFlow | manual
-    targetValue: 75.5,        // corresponds to 45.0% fill, 63 u/s per thruster, 441 u/s total
+    targetValue: 75.5,        // corresponds to 45.0% fill, 105% usage (63 u/s), 441 u/s total
     manualOn: 18,
     manualPeriod: 49,
     maxPeriod: 60,
@@ -67,12 +70,32 @@
     const tc = clamp(t, 0, 1);
     const fill = MIN_FILL + tc * (MAX_FILL - MIN_FILL);
     const eff = MAX_EFF - tc * (MAX_EFF - MIN_EFF);
-    const flowPerThruster = (MIN_FLOW_S + tc * (MAX_FLOW_S - MIN_FLOW_S)) * quality;
+    const usagePerTickNormal = MIN_USAGE_TICK + tc * (MAX_USAGE_TICK - MIN_USAGE_TICK); // 0.1..2.0
+    const usagePct = usagePerTickNormal * 100; // 10%..200% (Factoriopedia fluid usage %)
+    const flowPerThruster = usagePerTickNormal * UPS * quality;
     const totalFlow = flowPerThruster * thrusters;
-    const usagePerTick = flowPerThruster / UPS;
-    const thrustKN = thrusters * THRUST_SCALE * usagePerTick * eff; // total thrust in kN (Lua formula unit)
+    const thrustPerThrusterKN = THRUST_SCALE * quality * usagePerTickNormal * eff;
+    const thrustKN = thrusters * thrustPerThrusterKN;
+    const maxThrustPerThrusterKN = MAX_THRUST_PER_THR_KN * quality;
+    const thrustPct = (thrustPerThrusterKN / maxThrustPerThrusterKN) * 100; // 9.8%..100%
     const speedKms = equilibriumSpeedKms(thrustKN, weightTons);
-    return { t: tc, fill, eff, flowPerThruster, totalFlow, thrustKN, speedKms };
+    const maxSpeedKms = equilibriumSpeedKms(thrusters * maxThrustPerThrusterKN, weightTons);
+    const speedPct = maxSpeedKms > 0 ? (speedKms / maxSpeedKms) * 100 : 0;
+
+    return {
+      t: tc,
+      fill,
+      eff,
+      usagePct,
+      flowPerThruster,
+      totalFlow,
+      thrustPerThrusterKN,
+      thrustKN,
+      thrustPct,
+      speedKms,
+      maxSpeedKms,
+      speedPct
+    };
   }
 
   /**
@@ -104,34 +127,51 @@
     const flowPerThruster = totalFlow / Math.max(thrusters, 1);
     const minFlowQ = MIN_FLOW_S * quality;
     const maxFlowQ = MAX_FLOW_S * quality;
+    const maxThrustPerThrusterKN = MAX_THRUST_PER_THR_KN * quality;
+    const maxSpeedKms = equilibriumSpeedKms(thrusters * maxThrustPerThrusterKN, weightTons);
 
     if (flowPerThruster <= 0) {
-      return { t: 0, fill: 0, eff: 1.0, flowPerThruster: 0, totalFlow: 0, thrustKN: 0, speedKms: 0 };
+      return {
+        t: 0,
+        fill: 0,
+        eff: 1.0,
+        usagePct: 0,
+        flowPerThruster: 0,
+        totalFlow: 0,
+        thrustPerThrusterKN: 0,
+        thrustKN: 0,
+        thrustPct: 0,
+        speedKms: 0,
+        maxSpeedKms,
+        speedPct: 0
+      };
     }
     if (flowPerThruster <= minFlowQ) {
       const frac = flowPerThruster / minFlowQ;
       const usagePerTick = flowPerThruster / UPS;
-      const thrustKN = thrusters * THRUST_SCALE * usagePerTick * MAX_EFF;
+      const thrustPerThrusterKN = THRUST_SCALE * usagePerTick * MAX_EFF;
+      const thrustKN = thrusters * thrustPerThrusterKN;
+      const speedKms = equilibriumSpeedKms(thrustKN, weightTons);
       return {
         t: 0,
         fill: MIN_FILL * frac,
         eff: MAX_EFF,
+        usagePct: (flowPerThruster / (BASE_USAGE_FLOW_S * quality)) * 100,
         flowPerThruster,
         totalFlow,
+        thrustPerThrusterKN,
         thrustKN,
-        speedKms: equilibriumSpeedKms(thrustKN, weightTons)
+        thrustPct: (thrustPerThrusterKN / maxThrustPerThrusterKN) * 100,
+        speedKms,
+        maxSpeedKms,
+        speedPct: maxSpeedKms > 0 ? (speedKms / maxSpeedKms) * 100 : 0
       };
     }
     const t = clamp((flowPerThruster - minFlowQ) / (maxFlowQ - minFlowQ), 0, 1);
     return metricsFromT(t, thrusters, quality, weightTons);
   }
 
-  /**
-   * Solve for curve parameter t in [0, 1] given desired thrustKN.
-   * For a single normal thruster:
-   * usage(t) * eff(t) = (0.1 + 1.9t)(1 - 0.49t) = 0.1 + 1.851t - 0.931t^2
-   * Total thrust = thrusters * quality * 100000 * (0.1 + 1.851t - 0.931t^2)
-   */
+  /** Solve for curve parameter t in [0, 1] given desired thrustKN */
   function solveTFromThrust(targetThrustKN, thrusters, quality) {
     const scale = thrusters * quality * THRUST_SCALE;
     const minThrust = scale * (MIN_USAGE_TICK * MAX_EFF);
@@ -143,7 +183,6 @@
       return { t: 1, belowMin: false, aboveMax: true, ratioBelowMin: 1 };
     }
     const y = targetThrustKN / scale;
-    // 0.931 t^2 - 1.851 t + (y - 0.1) = 0 -> choose smaller root in [0, 1]
     const a = 0.931;
     const b = -1.851;
     const c = y - 0.1;
@@ -156,7 +195,6 @@
   // 4. MODULATION (PWM Rational Search & Delta-Sigma Phase Accumulator)
   // =========================================================================
 
-  /** Generate Pareto-optimal PWM fractions on / period for targetDuty in [0, 1] */
   function findPwmCandidates(targetDuty, maxPeriod) {
     const maxP = clamp(Math.round(maxPeriod), 2, 600);
     const duty = clamp(targetDuty, 0, 1);
@@ -170,7 +208,6 @@
       const err = Math.abs(actual - duty);
       const key = actual.toFixed(10);
 
-      // Keep only strictly improving approximations (Pareto frontier by period)
       if (!seen.has(key) && err < bestErr - 1e-12) {
         seen.add(key);
         bestErr = err;
@@ -185,7 +222,6 @@
     return candidates;
   }
 
-  /** Compute Delta-Sigma (Bresenham) integer parameters A, B, threshold (B - A) */
   function computeDeltaSigma(desiredTotalFlow, totalPumpCap, scale) {
     const s = scale === 10 ? 10 : 1;
     const B = Math.max(1, Math.round(totalPumpCap * s));
@@ -195,7 +231,6 @@
     return { A, B, threshold, scale: s, duty: actualDuty };
   }
 
-  /** Generate a 60-tick pulse train for PWM or Delta-Sigma */
   function generatePulseTrain(length, mode, pwm, ds) {
     const pulses = [];
     if (mode === "pwm") {
@@ -221,10 +256,6 @@
   // 5. TRANSIENT FLUIDBOX STABILITY SIMULATION (PWM vs Delta-Sigma)
   // =========================================================================
 
-  /**
-   * Simulates a thruster bank's fluidbox over warm-up + 180 observation ticks
-   * under both Standard PWM and Delta-Sigma pulses so users can visually compare ripple.
-   */
   function simulateStability(pwm, ds, thrusters, quality, totalPumpCap) {
     const capTotal = thrusters * THRUSTER_FLUIDBOX;
     const pumpPerTick = totalPumpCap / UPS;
@@ -324,7 +355,7 @@
       if (solved.aboveMax) {
         desiredFlow = maxThrusterFlow;
         warning = {
-          text: `Target speed (${state.targetValue.toFixed(1)} km/s) exceeds max speed for ${thrusters} thrusters at ${weightTons}t (${maxUnthrottledMetrics.speedKms.toFixed(1)} km/s).`,
+          text: `Target speed (${state.targetValue.toFixed(1)} km/s) exceeds theoretical max speed for ${thrusters} thrusters at ${weightTons}t (${maxUnthrottledMetrics.speedKms.toFixed(1)} km/s).`,
           fixLabel: `Set to ${maxSystemMetrics.speedKms.toFixed(1)} km/s`,
           fixAction: () => {
             state.targetValue = Number(maxSystemMetrics.speedKms.toFixed(1));
@@ -412,6 +443,7 @@
       maxThrusterFlow,
       maxAchievableFlow,
       maxSystemMetrics,
+      maxUnthrottledMetrics,
       desiredFlow: clampedFlow,
       desiredMetrics,
       pwm,
@@ -558,92 +590,116 @@
   }
 
   // =========================================================================
-  // 8. SVG RENDERERS (Operating Curve & Stability Comparison)
+  // 8. SVG RENDERERS (Factoriopedia 0-100% Fill / 0-200% Y-Axis + Stability)
   // =========================================================================
 
-  const CURVE_PAD = { left: 48, right: 52, top: 20, bottom: 38 };
-  const CURVE_W = 640;
-  const CURVE_H = 310;
+  const CURVE_PAD = { left: 52, right: 62, top: 22, bottom: 38 };
+  const CURVE_W = 650;
+  const CURVE_H = 320;
 
   function renderOperatingCurve(model) {
     const svg = document.getElementById("operatingCurveSvg");
     const pw = CURVE_W - CURVE_PAD.left - CURVE_PAD.right;
     const ph = CURVE_H - CURVE_PAD.top - CURVE_PAD.bottom;
 
-    const maxFlowPerThruster = MAX_FLOW_S * model.quality;
-    const maxSpeedCurve = Math.max(10, metricsFromT(1, model.thrusters, model.quality, model.weightTons).speedKms);
-    const speedAxisMax = Math.ceil(maxSpeedCurve / 50) * 50;
+    // Exact Factoriopedia ranges: X = 0%..100% fill, Y = 0%..200%
+    const xOfFill = (fillPct) => CURVE_PAD.left + (clamp(fillPct, 0, 100) / 100) * pw;
+    const yOfPct200 = (pct) => CURVE_PAD.top + (1 - clamp(pct, 0, 200) / 200) * ph;
 
-    const xOfFill = (fillPct) => CURVE_PAD.left + ((fillPct - 10) / 70) * pw;
-    const yOfPct = (pct) => CURVE_PAD.top + (1 - pct / 100) * ph;
-    const yOfSpeed = (spd) => CURVE_PAD.top + (1 - spd / speedAxisMax) * ph;
-
-    // Sample curve points across 10%..80% fill
+    // Build all 4 curves across 0%..100% fill (with Factoriopedia plateaus on 0-10% and 80-100%)
+    const fluidPts = [];
+    const thrustPts = [];
     const effPts = [];
-    const flowPts = [];
-    const spdPts = [];
-    const steps = 70;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
+    const speedPts = [];
+
+    for (let f = 0; f <= 100; f += 1) {
+      const t = clamp((f - 10) / 70, 0, 1);
       const m = metricsFromT(t, model.thrusters, model.quality, model.weightTons);
-      const x = xOfFill(m.fill * 100);
-      effPts.push(`${x.toFixed(1)},${yOfPct(m.eff * 100).toFixed(1)}`);
-      flowPts.push(`${x.toFixed(1)},${yOfPct((m.flowPerThruster / maxFlowPerThruster) * 100).toFixed(1)}`);
-      spdPts.push(`${x.toFixed(1)},${yOfSpeed(m.speedKms).toFixed(1)}`);
+      const x = xOfFill(f).toFixed(1);
+      fluidPts.push(`${x},${yOfPct200(m.usagePct).toFixed(1)}`);
+      thrustPts.push(`${x},${yOfPct200(m.thrustPct).toFixed(1)}`);
+      effPts.push(`${x},${yOfPct200(m.eff * 100).toFixed(1)}`);
+      speedPts.push(`${x},${yOfPct200(m.speedPct).toFixed(1)}`);
     }
 
-    // Current operating marker
-    const curFillPct = clamp(model.achievedMetrics.fill * 100, 10, 80);
+    // Current operating point marker
+    const curM = model.achievedMetrics;
+    const curFillPct = clamp(curM.fill * 100, 0, 100);
     const curX = xOfFill(curFillPct);
-    const curEffY = yOfPct(model.achievedMetrics.eff * 100);
-    const curFlowY = yOfPct((model.achievedMetrics.flowPerThruster / maxFlowPerThruster) * 100);
-    const curSpdY = yOfSpeed(model.achievedMetrics.speedKms);
+    const curFluidY = yOfPct200(curM.usagePct);
+    const curThrustY = yOfPct200(curM.thrustPct);
+    const curEffY = yOfPct200(curM.eff * 100);
+    const curSpeedY = yOfPct200(curM.speedPct);
 
-    // Optional Pump Cap vertical line (amber dashed so it stays distinct from red Speed curve)
+    // Optional Pump Cap vertical line (purple dashed so it never collides with the 4 curves)
     let pumpCapSvg = "";
     if (model.totalPumpCap < model.maxThrusterFlow - 0.1) {
-      const capFillPct = clamp(model.maxSystemMetrics.fill * 100, 10, 80);
+      const capFillPct = clamp(model.maxSystemMetrics.fill * 100, 0, 100);
       const capX = xOfFill(capFillPct);
+      const labelX = capX + 6 > CURVE_W - CURVE_PAD.right - 66 ? capX - 66 : capX + 6;
       pumpCapSvg = `
         <line x1="${capX.toFixed(1)}" y1="${CURVE_PAD.top}" x2="${capX.toFixed(1)}" y2="${CURVE_PAD.top + ph}"
               stroke="${COLOR_PUMP_CAP}" stroke-width="1.6" stroke-dasharray="5 4" />
-        <text x="${Math.min(capX + 5, CURVE_W - CURVE_PAD.right - 68)}" y="${CURVE_PAD.top + 14}"
-              fill="#fcd34d" font-size="11" font-family="monospace">Pump Cap</text>`;
+        <text x="${labelX.toFixed(1)}" y="${CURVE_PAD.top + 14}"
+              fill="${COLOR_PUMP_CAP}" font-size="11" font-family="monospace">Pump Cap</text>`;
     }
 
-    // Grid lines
+    // Factoriopedia Grid: Y = 0%, 40%, 80%, 120%, 160%, 200%; X = 0%, 20%, 40%, 60%, 80%, 100%
     let gridSvg = "";
-    for (let p = 0; p <= 100; p += 20) {
-      const y = yOfPct(p);
-      gridSvg += `<line x1="${CURVE_PAD.left}" y1="${y}" x2="${CURVE_PAD.left + pw}" y2="${y}" stroke="#2b323d" stroke-width="1" />`;
-      gridSvg += `<text x="${CURVE_PAD.left - 8}" y="${y + 4}" text-anchor="end" fill="#8b97a8" font-size="11" font-family="monospace">${p}%</text>`;
-      const spdTick = Math.round((p / 100) * speedAxisMax);
-      gridSvg += `<text x="${CURVE_PAD.left + pw + 8}" y="${y + 4}" text-anchor="start" fill="${COLOR_SPEED_TEXT}" font-size="11" font-family="monospace">${spdTick}</text>`;
+    for (let p = 0; p <= 200; p += 40) {
+      const y = yOfPct200(p);
+      gridSvg += `<line x1="${CURVE_PAD.left}" y1="${y}" x2="${CURVE_PAD.left + pw}" y2="${y}" stroke="#282828" stroke-width="1" />`;
+      gridSvg += `<text x="${CURVE_PAD.left - 8}" y="${y + 4}" text-anchor="end" fill="#8c8c8c" font-size="11" font-family="monospace">${p}%</text>`;
     }
-    for (let f = 10; f <= 80; f += 10) {
+    // Subtle 100% reference line (top of Thrust, Efficiency, and Cruise Speed %)
+    const y100 = yOfPct200(100);
+    gridSvg += `<line x1="${CURVE_PAD.left}" y1="${y100}" x2="${CURVE_PAD.left + pw}" y2="${y100}" stroke="#3a3a3a" stroke-width="1" stroke-dasharray="3 3" />`;
+
+    // Right-hand Speed reference ticks aligned to 0%, 40%, 80%, 100% of theoretical max speed
+    const maxSpd = model.maxUnthrottledMetrics.speedKms;
+    [0, 40, 80, 100].forEach((p) => {
+      const y = yOfPct200(p);
+      const kmVal = (p / 100) * maxSpd;
+      const lbl = p === 100 ? `${kmVal.toFixed(0)} max` : `${kmVal.toFixed(0)}`;
+      gridSvg += `<text x="${CURVE_PAD.left + pw + 7}" y="${y + 4}" text-anchor="start" fill="${COLOR_SPEED_TEXT}" font-size="10.5" font-family="monospace">${lbl}</text>`;
+    });
+
+    for (let f = 0; f <= 100; f += 20) {
       const x = xOfFill(f);
-      gridSvg += `<line x1="${x}" y1="${CURVE_PAD.top}" x2="${x}" y2="${CURVE_PAD.top + ph}" stroke="#232831" stroke-width="1" />`;
-      gridSvg += `<text x="${x}" y="${CURVE_H - 15}" text-anchor="middle" fill="#8b97a8" font-size="11" font-family="monospace">${f}%</text>`;
+      gridSvg += `<line x1="${x}" y1="${CURVE_PAD.top}" x2="${x}" y2="${CURVE_PAD.top + ph}" stroke="#282828" stroke-width="1" />`;
+      gridSvg += `<text x="${x}" y="${CURVE_H - 15}" text-anchor="middle" fill="#8c8c8c" font-size="11" font-family="monospace">${f}%</text>`;
     }
+
+    // Subtle shaded active interpolation zone (10%..80%)
+    const x10 = xOfFill(10);
+    const x80 = xOfFill(80);
 
     svg.innerHTML = `
+      <rect x="${CURVE_PAD.left}" y="${CURVE_PAD.top}" width="${pw}" height="${ph}" fill="#141414" />
+      <rect x="${x10.toFixed(1)}" y="${CURVE_PAD.top}" width="${(x80 - x10).toFixed(1)}" height="${ph}" fill="#ffffff" fill-opacity="0.025" />
+
       ${gridSvg}
-      <text x="${CURVE_PAD.left + pw / 2}" y="${CURVE_H - 2}" text-anchor="middle" fill="#98a4b5" font-size="11">Fluid Reserve Fill (%)</text>
-      <text x="${CURVE_W - 6}" y="${CURVE_PAD.top - 6}" text-anchor="end" fill="${COLOR_SPEED_TEXT}" font-size="11">Speed (km/s)</text>
-      <text x="${CURVE_PAD.left}" y="${CURVE_PAD.top - 6}" text-anchor="start" fill="#98a4b5" font-size="11">Eff % / Fluid %</text>
+
+      <text x="${CURVE_PAD.left + pw / 2}" y="${CURVE_H - 2}" text-anchor="middle" fill="#9ca3af" font-size="11">Fluid Fill (%)</text>
+      <text x="${CURVE_PAD.left}" y="${CURVE_PAD.top - 7}" text-anchor="start" fill="#9ca3af" font-size="11">Scale (%)</text>
+      <text x="${CURVE_W - 6}" y="${CURVE_PAD.top - 7}" text-anchor="end" fill="${COLOR_SPEED_TEXT}" font-size="11">Speed (km/s)</text>
 
       ${pumpCapSvg}
 
-      <polyline fill="none" stroke="${COLOR_EFF}" stroke-width="2.4" points="${effPts.join(" ")}" />
-      <polyline fill="none" stroke="${COLOR_FLUID}" stroke-width="2.5" points="${flowPts.join(" ")}" />
-      <polyline fill="none" stroke="${COLOR_SPEED}" stroke-width="2.5" points="${spdPts.join(" ")}" />
+      <!-- 4 Curves: Blue = Fluid Usage, Orange = Efficiency, Green = Thrust, Red = Cruise Speed -->
+      <polyline fill="none" stroke="${COLOR_FLUID}" stroke-width="2.3" points="${fluidPts.join(" ")}" />
+      <polyline fill="none" stroke="${COLOR_EFF}" stroke-width="2.3" points="${effPts.join(" ")}" />
+      <polyline fill="none" stroke="${COLOR_THRUST}" stroke-width="2.3" points="${thrustPts.join(" ")}" />
+      <polyline fill="none" stroke="${COLOR_SPEED}" stroke-width="2.3" points="${speedPts.join(" ")}" />
 
+      <!-- Factoriopedia-style crisp vertical crosshair -->
       <line x1="${curX.toFixed(1)}" y1="${CURVE_PAD.top}" x2="${curX.toFixed(1)}" y2="${CURVE_PAD.top + ph}"
-            stroke="#e6ebf2" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.8" />
+            stroke="#ffffff" stroke-width="1.35" opacity="0.88" />
 
-      <circle cx="${curX.toFixed(1)}" cy="${curEffY.toFixed(1)}" r="5" fill="${COLOR_EFF}" stroke="#111316" stroke-width="1.8" />
-      <circle cx="${curX.toFixed(1)}" cy="${curFlowY.toFixed(1)}" r="5" fill="${COLOR_FLUID}" stroke="#111316" stroke-width="1.8" />
-      <circle cx="${curX.toFixed(1)}" cy="${curSpdY.toFixed(1)}" r="5" fill="${COLOR_SPEED}" stroke="#111316" stroke-width="1.8" />
+      <circle cx="${curX.toFixed(1)}" cy="${curFluidY.toFixed(1)}" r="4.6" fill="${COLOR_FLUID}" stroke="#121212" stroke-width="1.6" />
+      <circle cx="${curX.toFixed(1)}" cy="${curEffY.toFixed(1)}" r="4.6" fill="${COLOR_EFF}" stroke="#121212" stroke-width="1.6" />
+      <circle cx="${curX.toFixed(1)}" cy="${curThrustY.toFixed(1)}" r="4.6" fill="${COLOR_THRUST}" stroke="#121212" stroke-width="1.6" />
+      <circle cx="${curX.toFixed(1)}" cy="${curSpeedY.toFixed(1)}" r="4.6" fill="${COLOR_SPEED}" stroke="#121212" stroke-width="1.6" />
     `;
   }
 
@@ -708,13 +764,13 @@
       ${grid}
       <line x1="${pad.left}" y1="${targetY.toFixed(1)}" x2="${pad.left + pw}" y2="${targetY.toFixed(1)}"
             stroke="#98a4b5" stroke-width="1.2" stroke-dasharray="5 4" />
-      <polyline fill="none" stroke="#f59e0b" stroke-width="2.2" opacity="0.9" points="${pwmPts}" />
-      <polyline fill="none" stroke="#38bdf8" stroke-width="2.5" points="${dsPts}" />
+      <polyline fill="none" stroke="${COLOR_EFF}" stroke-width="2.2" opacity="0.9" points="${pwmPts}" />
+      <polyline fill="none" stroke="${COLOR_FLUID}" stroke-width="2.5" points="${dsPts}" />
 
       <g font-size="11" font-family="sans-serif">
-        <line x1="${pad.left + 8}" y1="12" x2="${pad.left + 26}" y2="12" stroke="#f59e0b" stroke-width="2.5" />
+        <line x1="${pad.left + 8}" y1="12" x2="${pad.left + 26}" y2="12" stroke="${COLOR_EFF}" stroke-width="2.5" />
         <text x="${pad.left + 32}" y="16" fill="#e6ebf2">Standard PWM (${model.pwm.on}/${model.pwm.period})</text>
-        <line x1="${pad.left + 195}" y1="12" x2="${pad.left + 213}" y2="12" stroke="#38bdf8" stroke-width="2.5" />
+        <line x1="${pad.left + 195}" y1="12" x2="${pad.left + 213}" y2="12" stroke="${COLOR_FLUID}" stroke-width="2.5" />
         <text x="${pad.left + 219}" y="16" fill="#e6ebf2">Delta-Sigma (A=${model.ds.A}, B=${model.ds.B})</text>
         <line x1="${pad.left + 420}" y1="12" x2="${pad.left + 438}" y2="12" stroke="#98a4b5" stroke-width="1.5" stroke-dasharray="4 3" />
         <text x="${pad.left + 444}" y="16" fill="#98a4b5">Target (${targetVal.toFixed(1)}${unit})</text>
@@ -764,7 +820,7 @@
 
     const maxFlowThr = MAX_FLOW_S * model.quality;
     const minFlowThr = MIN_FLOW_S * model.quality;
-    const maxSpeed = metricsFromT(1, model.thrusters, model.quality, model.weightTons).speedKms;
+    const maxSpeed = model.maxUnthrottledMetrics.speedKms;
 
     let min = 0, max = 100, step = 0.1, label = "", hint = "";
     if (mode === "efficiency") {
@@ -781,11 +837,11 @@
       hint = `0 – ${maxSpeed.toFixed(1)} km/s`;
     } else if (mode === "flowPerThruster") {
       min = Number(minFlowThr.toFixed(1)); max = Number(maxFlowThr.toFixed(1)); step = 0.5;
-      label = "Fluid Consumption / Thruster (u/s)";
+      label = "Fluid Usage / Thruster (u/s)";
       hint = `${minFlowThr.toFixed(1)} – ${maxFlowThr.toFixed(1)} u/s`;
     } else if (mode === "totalFlow") {
       min = 0; max = Number(model.maxThrusterFlow.toFixed(0)); step = 1;
-      label = "Total Fluid Consumption (u/s)";
+      label = "Total Fluid Usage (u/s)";
       hint = `0 – ${model.maxThrusterFlow.toFixed(0)} u/s`;
     }
 
@@ -816,7 +872,7 @@
           <td>${c.off}</td>
           <td>${(c.duty * 100).toFixed(2)}%</td>
           <td>${flow.toFixed(1)} u/s</td>
-          <td>${m.speedKms.toFixed(1)} km/s</td>
+          <td>${m.speedKms.toFixed(1)} km/s (${m.speedPct.toFixed(1)}%)</td>
           <td>${errPct >= 0 ? "+" : ""}${errPct.toFixed(2)}%</td>
         </tr>`;
     });
@@ -885,36 +941,49 @@
     document.getElementById("toggleDeltaSigma").checked = state.useDeltaSigma;
 
     const pill = document.getElementById("heroMethodPill");
+    const errStr = `${model.flowErrorPct >= 0 ? "+" : ""}${model.flowErrorPct.toFixed(2)}%`;
     if (state.useDeltaSigma) {
       document.getElementById("heroModeEyebrow").textContent = "Delta-Sigma Phase Accumulator";
       document.getElementById("heroHeadline").textContent = `+${model.ds.A} / −${model.ds.threshold}`;
       document.getElementById("heroSubline").textContent =
-        `Capacity B = ${model.ds.B} · Fire pulse when E ≥ ${model.ds.threshold} · ${(model.ds.duty * 100).toFixed(2)}% duty`;
+        `Capacity B = ${model.ds.B} · Fire when E ≥ ${model.ds.threshold} · ${(model.ds.duty * 100).toFixed(2)}% duty · Error: ${errStr}`;
       pill.textContent = "Delta-Sigma";
-      pill.classList.add("pill-cyan");
+      pill.classList.add("pill-blue");
     } else {
       document.getElementById("heroModeEyebrow").textContent = "Optimal PWM Clock";
       document.getElementById("heroHeadline").textContent = `${model.pwm.on} / ${model.pwm.period} ticks`;
       document.getElementById("heroSubline").textContent =
-        `${model.pwm.on} ticks ON, ${model.pwm.off} ticks OFF · ${(model.pwm.duty * 100).toFixed(2)}% duty cycle`;
+        `${model.pwm.on} ticks ON, ${model.pwm.off} ticks OFF · ${(model.pwm.duty * 100).toFixed(2)}% duty · Error: ${errStr}`;
       pill.textContent = "PWM";
-      pill.classList.remove("pill-cyan");
+      pill.classList.remove("pill-blue");
     }
 
     const m = model.achievedMetrics;
+    const thrustPerThrMN = m.thrustPerThrusterKN / 1000;
+    const totalThrustMN = m.thrustKN / 1000;
     const lowSpd = Math.max(0, m.speedKms - GRAVITY_BAND_KMS);
     const highSpd = m.speedKms > 0 ? m.speedKms + GRAVITY_BAND_KMS : 0;
 
-    document.getElementById("kpiSpeed").innerHTML = `${m.speedKms.toFixed(1)} <small>km/s</small>`;
-    document.getElementById("kpiSpeedBand").textContent = `${lowSpd.toFixed(0)} – ${highSpd.toFixed(0)} km/s (±10g)`;
+    // Top 4 KPIs (Factoriopedia color-coherent + % with exact quality-scaled value in parentheses)
+    document.getElementById("kpiThrust").innerHTML =
+      `${m.thrustPct.toFixed(1)}% <small>(${thrustPerThrMN.toFixed(1)} MN)</small>`;
+    document.getElementById("kpiThrustMeta").textContent =
+      `${totalThrustMN.toFixed(1)} MN total · ${model.thrusters} thruster${model.thrusters > 1 ? "s" : ""}`;
+
     document.getElementById("kpiEff").innerHTML = `${(m.eff * 100).toFixed(1)}<small>%</small>`;
     document.getElementById("kpiFill").textContent = `${(m.fill * 100).toFixed(1)}% fluid fill`;
-    document.getElementById("kpiFlow").innerHTML = `${model.achievedFlow.toFixed(1)} <small>u/s</small>`;
-    document.getElementById("kpiPerThruster").textContent = `${m.flowPerThruster.toFixed(1)} u/s per thruster`;
-    document.getElementById("kpiThrust").innerHTML = `${(m.thrustKN / 1000).toFixed(1)} <small>MN</small>`;
-    document.getElementById("kpiError").textContent =
-      `Error: ${model.flowErrorPct >= 0 ? "+" : ""}${model.flowErrorPct.toFixed(2)}%`;
 
+    document.getElementById("kpiFlow").innerHTML =
+      `${m.usagePct.toFixed(1)}% <small>(${m.flowPerThruster.toFixed(1)} u/s)</small>`;
+    document.getElementById("kpiFlowMeta").textContent =
+      `${model.achievedFlow.toFixed(1)} u/s total per fluid`;
+
+    document.getElementById("kpiSpeed").innerHTML =
+      `${m.speedPct.toFixed(1)}% <small>(${m.speedKms.toFixed(1)} km/s)</small>`;
+    document.getElementById("kpiSpeedBand").textContent =
+      `${lowSpd.toFixed(0)}–${highSpd.toFixed(0)} km/s (±10g) · Max ${m.maxSpeedKms.toFixed(1)}`;
+
+    // Warning banner
     const warnEl = document.getElementById("warningBanner");
     if (model.warning) {
       warnEl.classList.remove("hidden");
@@ -924,10 +993,15 @@
       warnEl.classList.add("hidden");
     }
 
+    // Operating Curve readout grid (% with exact quality-scaled values in parentheses)
     document.getElementById("readoutFill").textContent = `${(m.fill * 100).toFixed(1)}%`;
+    document.getElementById("readoutThrust").textContent =
+      `${m.thrustPct.toFixed(1)}% (${thrustPerThrMN.toFixed(1)} MN)`;
     document.getElementById("readoutEff").textContent = `${(m.eff * 100).toFixed(1)}%`;
-    document.getElementById("readoutFlow").textContent = `${m.flowPerThruster.toFixed(1)} u/s`;
-    document.getElementById("readoutSpeed").textContent = `${m.speedKms.toFixed(1)} km/s`;
+    document.getElementById("readoutFlow").textContent =
+      `${m.usagePct.toFixed(1)}% (${m.flowPerThruster.toFixed(1)} u/s)`;
+    document.getElementById("readoutSpeed").textContent =
+      `${m.speedPct.toFixed(1)}% (${m.speedKms.toFixed(1)} km/s)`;
     document.getElementById("readoutPumpCap").textContent = `${model.totalPumpCap} u/s`;
 
     updateTargetControlBounds(model);
@@ -942,7 +1016,7 @@
   }
 
   // =========================================================================
-  // 10. INTERACTIVE CURVE CLICK / DRAG HANDLER
+  // 10. INTERACTIVE CURVE CLICK / DRAG HANDLER (0%..100% X-Axis)
   // =========================================================================
 
   function applyCurvePointer(evt) {
@@ -952,7 +1026,8 @@
     const scaleX = CURVE_W / rect.width;
     const x = (evt.clientX - rect.left) * scaleX;
     const pw = CURVE_W - CURVE_PAD.left - CURVE_PAD.right;
-    const t = clamp((x - CURVE_PAD.left) / pw, 0, 1);
+    const fillPct = clamp(((x - CURVE_PAD.left) / pw) * 100, 0, 100);
+    const t = clamp((fillPct - 10) / 70, 0, 1);
     const m = metricsFromT(t, currentModel.thrusters, currentModel.quality, currentModel.weightTons);
 
     if (state.targetMode === "manual") {
@@ -963,7 +1038,7 @@
     if (state.targetMode === "efficiency") {
       state.targetValue = Number((m.eff * 100).toFixed(1));
     } else if (state.targetMode === "fill") {
-      state.targetValue = Number((m.fill * 100).toFixed(1));
+      state.targetValue = Number(clamp(fillPct, 10, 80).toFixed(1));
     } else if (state.targetMode === "speed") {
       state.targetValue = Number(m.speedKms.toFixed(1));
     } else if (state.targetMode === "flowPerThruster") {
@@ -1037,7 +1112,7 @@
       state.targetMode = newMode;
       if (m) {
         if (newMode === "efficiency") state.targetValue = Number((m.eff * 100).toFixed(1));
-        else if (newMode === "fill") state.targetValue = Number((m.fill * 100).toFixed(1));
+        else if (newMode === "fill") state.targetValue = Number(clamp(m.fill * 100, 10, 80).toFixed(1));
         else if (newMode === "speed") state.targetValue = Number(m.speedKms.toFixed(1));
         else if (newMode === "flowPerThruster") state.targetValue = Number(m.flowPerThruster.toFixed(1));
         else if (newMode === "totalFlow") state.targetValue = Number(m.totalFlow.toFixed(1));
