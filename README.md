@@ -40,8 +40,11 @@ From [`space-age/prototypes/entity/entities.lua`](https://github.com/wube/factor
 - [Pump Throughput & Quality](https://wiki.factorio.com/Pump)
 - [Decider Combinator (2.1 Else Outputs)](https://wiki.factorio.com/Decider_combinator)
 
-## Running Locally or Hosting on GitHub Pages
+## AI Disclosure
 
-No build step or dependencies are required:
-1. Open `index.html` directly in any modern browser to run locally.
-2. To host on **GitHub Pages**, upload `index.html`, `styles.css`, `app.js`, and `README.md` to the root of a public repository and enable **Settings → Pages → Deploy from branch (`main` / `/root`)**.
+This tool was designed, specified, and verified by a human player, with HTML, CSS, and JavaScript implementation assisted by Google Gemini.
+
+- **Human contribution:** Feature design, in-game Space Platform Hub motion-gating combinator logic, UI layout direction, in-game testing of both PWM and Delta-Sigma circuits, and verification against Factorio 2.1.21+ formulas.
+- **AI contribution:** Frontend code generation (`index.html`, `styles.css`, `app.js`), SVG graph rendering, and fluidbox simulation scaffolding.
+
+All physics equations are cross-checked against Wube's public `factorio-data` prototypes and the official Factorio Wiki. If you spot a calculation bug or edge case, please open an Issue.
